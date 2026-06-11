@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2B50E0">
+<title>오늘, 셋 — 루틴·업무 트래커</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{
+  --paper:#FBFAF5; --grid:rgba(22,33,58,.055); --ink:#16213A; --sub:#6B7488;
+  --accent:#2B50E0; --accent-soft:#EAEEFF; --done:#169873; --done-soft:#E4F4EE;
+  --line:#E3E1D8; --card:#FFFFFF; --warn:#B4360A; --warn-soft:#FDEDE7;
+  --hold:#9A6B00; --hold-soft:#FFF4DC;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:28px 28px;
+  color:var(--ink);
+  font-family:'Apple SD Gothic Neo','Pretendard','Noto Sans KR',sans-serif;
+  min-height:100vh; padding-bottom:80px;
+}
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px}
+header .eyebrow{font-size:11px;letter-spacing:.15em;font-weight:700;color:var(--accent)}
+header h1{font-size:30px;font-weight:800;letter-spacing:-.02em;margin-top:2px}
+header .date{font-size:13px;color:var(--sub);margin-top:4px}
+
+/* 탭 */
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;z-index:50;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;padding:12px 4px;background:none;border:none;font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;font-family:inherit}
+nav button.active{color:var(--accent)}
+nav button .ico{display:block;font-size:18px;margin-bottom:2px}
+
+section.panel{display:none;margin-top:20px}
+section.panel.active{display:block}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;margin:18px 0 10px}
+.sec-head h2{font-size:17px;font-weight:700}
+.sec-head .hint{font-size:11px;color:var(--sub)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.empty{border:2px dashed var(--line);border-radius:16px;padding:20px;text-align:center;font-size:13px;color:var(--sub);background:transparent}
+
+/* 체크 */
+.check{width:24px;height:24px;border-radius:50%;border:2px solid var(--sub);background:transparent;color:#fff;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.check.on{background:var(--done);border-color:var(--done)}
+.row{display:flex;align-items:flex-start;gap:10px}
+.row .body{flex:1;min-width:0}
+.title{font-weight:600;font-size:15px}
+.title.through{text-decoration:line-through;opacity:.55}
+.meta{font-size:12px;color:var(--sub);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.b-todo{background:var(--accent-soft);color:var(--accent)}
+.b-doing{background:#E0F0FF;color:#0A66B4}
+.b-done{background:var(--done-soft);color:var(--done)}
+.b-hold{background:var(--hold-soft);color:var(--hold)}
+.b-late{background:var(--warn-soft);color:var(--warn)}
+.b-dday{background:var(--ink);color:#fff}
+.b-routine{background:#F0EFE8;color:var(--sub)}
+
+/* 진행바 */
+.bar{height:8px;border-radius:99px;background:#E9E7DD;overflow:hidden;margin:6px 0 14px}
+.bar>div{height:100%;background:var(--done);border-radius:99px;transition:width .4s}
+.bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-bottom:4px}
+
+/* 버튼 */
+.btn{font-family:inherit;cursor:pointer;border:none;border-radius:12px;font-weight:700;font-size:14px}
+.btn-primary{background:var(--accent);color:#fff;padding:11px 18px}
+.btn-ghost{background:none;border:1px solid var(--line);color:var(--sub);padding:7px 12px;font-size:12px}
+.btn-mini{background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:4px;font-family:inherit}
+.btn-mini.accent{color:var(--accent);font-weight:700}
+.fab{position:fixed;right:18px;bottom:78px;width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(43,80,224,.35);z-index:40}
+
+/* 폼/모달 */
+.modal-bg{position:fixed;inset:0;background:rgba(22,33,58,.45);display:none;align-items:flex-end;justify-content:center;z-index:100}
+.modal-bg.open{display:flex}
+.modal{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:760px;max-height:88vh;overflow-y:auto;padding:20px 18px calc(20px + env(safe-area-inset-bottom))}
+@media(min-width:600px){.modal-bg{align-items:center}.modal{border-radius:20px;width:520px}}
+.modal h3{font-size:17px;margin-bottom:14px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--sub);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;background:var(--paper);color:var(--ink)}
+.field textarea{resize:vertical;min-height:60px}
+.field-row{display:flex;gap:10px}.field-row .field{flex:1}
+.daypick{display:flex;gap:6px;flex-wrap:wrap}
+.daypick button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;font-family:inherit}
+.daypick button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.modal-actions .btn{flex:1;padding:12px}
+
+/* 팝업 (오늘 챙길 것) */
+#popup .modal{border:2px solid var(--accent)}
+#popup ul{list-style:none;margin:10px 0}
+#popup li{padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px;display:flex;gap:8px;align-items:center}
+#popup li:last-child{border:none}
+
+/* 통계 */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;text-align:center}
+.stat .num{font-size:26px;font-weight:800;color:var(--accent)}
+.stat .num.green{color:var(--done)} .stat .num.red{color:var(--warn)}
+.stat .lab{font-size:12px;color:var(--sub);margin-top:2px}
+.week{display:flex;gap:6px;justify-content:space-between}
+.week .day{flex:1;text-align:center}
+.week .day .dot{width:100%;aspect-ratio:1;max-width:42px;margin:0 auto 4px;border-radius:12px;background:#EFEEE6;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--sub)}
+.week .day .dot.full{background:var(--done);color:#fff}
+.week .day .dot.part{background:#A8DCC8;color:#0B5E43}
+.week .day .lab{font-size:10px;color:var(--sub)}
+
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.filter-row button{font-family:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--sub);cursor:pointer}
+.filter-row button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.foot{font-size:11px;color:var(--sub);line-height:1.7;margin-top:28px}
+.offline-tag{display:inline-block;font-size:10px;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--sub);margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">루틴 · 업무 · 일정 트래커 <span class="offline-tag" id="netState">오프라인 동작</span></div>
+    <h1>오늘, 셋.</h1>
+    <div class="date" id="todayDate"></div>
+  </header>
+
+  <!-- ① 오늘 -->
+  <section class="panel active" id="panel-today">
+    <div class="sec-head"><h2>오늘의 루틴</h2><span class="hint" id="routineHint"></span></div>
+    <div class="bar-label"><span>루틴 진행</span><span id="routineProg"></span></div>
+    <div class="bar"><div id="routineBar" style="width:0%"></div></div>
+    <div id="todayRoutines"></div>
+
+    <div class="sec-head"><h2>오늘 챙길 업무</h2><span class="hint">마감 임박 · 지연 · 진행중</span></div>
+    <div id="todayTasks"></div>
+  </section>
+
+  <!-- ② 업무 -->
+  <section class="panel" id="panel-tasks">
+    <div class="sec-head"><h2>업무 목록</h2><span class="hint">카운터파트 · 목표일 · 실제 완료일</span></div>
+    <div class="filter-row" id="taskFilters"></div>
+    <div id="taskList"></div>
+  </section>
+
+  <!-- ③ 루틴 관리 -->
+  <section class="panel" id="panel-routines">
+    <div class="sec-head"><h2>루틴 관리</h2><span class="hint">미리 등록하면 해당 날짜에 자동 표시</span></div>
+    <div id="routineList"></div>
+  </section>
+
+  <!-- ④ 기록 -->
+  <section class="panel" id="panel-stats">
+    <div class="sec-head"><h2>기록</h2><span class="hint">진척이 보이면 동기가 오릅니다 (목표 구배 효과)</span></div>
+    <div class="stat-grid" id="statCards"></div>
+    <div class="sec-head"><h2>최근 7일 루틴 달성</h2></div>
+    <div class="card"><div class="week" id="weekView"></div></div>
+    <div class="sec-head"><h2>데이터 백업</h2><span class="hint">기기에만 저장되므로 주기적 백업 권장</span></div>
+    <div class="card" style="display:flex;gap:10px">
+      <button class="btn btn-ghost" onclick="exportData()">JSON 내보내기</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">JSON 가져오기</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+    <div class="foot">
+      설계 근거: 외부 기록은 미완료 과제의 침투적 사고를 줄이고(Zeigarnik 1927; Masicampo &amp; Baumeister 2011),
+      앱 시작 시 팝업은 회상 시점을 행동 시점과 연결하는 실행 의도 원리(Gollwitzer 1999)를 따릅니다.
+      목표일 대비 실제 완료일 기록은 계획 오류(Kahneman &amp; Tversky 1979) 보정 데이터가 됩니다.
+    </div>
+  </section>
+</div>
+
+<button class="fab" id="fab" title="추가">+</button>
+
+<nav>
+  <button class="active" data-tab="today"><span class="ico">☀️</span>오늘</button>
+  <button data-tab="tasks"><span class="ico">📋</span>업무</button>
+  <button data-tab="routines"><span class="ico">🔁</span>루틴</button>
+  <button data-tab="stats"><span class="ico">📈</span>기록</button>
+</nav>
+
+<!-- 오늘 챙길 것 팝업 -->
+<div class="modal-bg" id="popup">
+  <div class="modal">
+    <h3>📌 오늘 챙길 것</h3>
+    <ul id="popupList"></ul>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closePopup()">확인했어요</button>
+    </div>
+  </div>
+</div>
+
+<!-- 업무 추가/수정 모달 -->
+<div class="modal-bg" id="taskModal">
+  <div class="modal">
+    <h3 id="taskModalTitle">업무 추가</h3>
+    <div class="field"><label>업무명 *</label><input id="tTitle" placeholder="예: P-1234 견적서 회신"></div>
+    <div class="field-row">
+      <div class="field"><label>카운터파트</label><input id="tCounterpart" placeholder="예: 발주처 김OO 프로"></div>
+      <div class="field"><label>상태</label>
+        <select id="tStatus">
+          <option value="todo">대기</option><option value="doing">진행중</option>
+          <option value="done">완료</option><option value="hold">보류</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>목표일</label><input type="date" id="tTarget"></div>
+      <div class="field"><label>실제 완료일</label><input type="date" id="tActual"></div>
+    </div>
+    <div class="field"><label>메모 (다음 행동을 "~하면 ~한다"로 적으면 효과적)</label><textarea id="tNotes" placeholder="예: 내일 오전 메일함 열면, 견적 조건 3개 확인부터 한다"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('taskModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveTask()">저장</button>
+    </div>
+    <button class="btn-mini" id="taskDeleteBtn" style="margin-top:10px;color:var(--warn)" onclick="deleteTask()">이 업무 삭제</button>
+  </div>
+</div>
+
+<!-- 루틴 추가/수정 모달 -->
+<div class="modal-bg" id="routineModal">
+  <div class="modal">
+    <h3 id="routineModalTitle">루틴 추가</h3>
+    <div class="field"><label>루틴명 *</label><input id="rTitle" placeholder="예: 일일 공정회의 자료 확인"></div>
+    <div class="field"><label>반복 주기</label>
+      <select id="rFreq" onchange="onFreqChange()">
+        <option value="daily">매일</option>
+        <option value="weekdays">평일 (월–금)</option>
+        <option value="weekly">매주 특정 요일</option>
+        <option value="monthly">매월 특정 일</option>
+      </select>
+    </div>
+    <div class="field" id="rDaysField" style="display:none"><label>요일 선택</label>
+      <div class="daypick" id="rDays"></div>
+    </div>
+    <div class="field" id="rDomField" style="display:none"><label>매월 며칠 (1–31)</label>
+      <input type="number" id="rDom" min="1" max="31" value="1">
+    </div>
+    <div class="field"><label>관련 카운터파트 (선택)</label><input id="rCounterpart" placeholder="예: 공무팀"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('routineModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveRoutine()">저장</button>
+    </div>
+    <button class="btn-mini" id="routineDeleteBtn" style="margin-top:10px;color:var(--warn)" onclick="deleteRoutine()">이 루틴 삭제</button>
+  </div>
+</div>
+
+<script>
+/* ───────────────── 데이터 계층 ───────────────── */
+const KEY = 'todaythree:v1';
+let state = { routines: [], routineLog: {}, tasks: [], lastPopup: '' };
+function load(){ try{ const s = localStorage.getItem(KEY); if(s) state = Object.assign(state, JSON.parse(s)); }catch(e){} }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ alert('저장 공간이 부족합니다. 기록 탭에서 백업 후 오래된 데이터를 정리하세요.'); } }
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+
+function todayStr(d){ d = d || new Date(); const z = n => String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
+function diffDays(a, b){ return Math.round((new Date(b) - new Date(a)) / 86400000); }
+const DAY_KO = ['일','월','화','수','목','금','토'];
+
+/* 루틴이 해당 날짜에 표시되는가 */
+function routineDueOn(r, date){
+  const dow = date.getDay();
+  if(r.freq === 'daily') return true;
+  if(r.freq === 'weekdays') return dow >= 1 && dow <= 5;
+  if(r.freq === 'weekly') return (r.days || []).includes(dow);
+  if(r.freq === 'monthly'){
+    const last = new Date(date.getFullYear(), date.getMonth()+1, 0).getDate();
+    return date.getDate() === Math.min(r.dom || 1, last); // 31일 설정 + 30일까지 있는 달 → 말일 처리
+  }
+  return false;
+}
+function freqLabel(r){
+  if(r.freq === 'daily') return '매일';
+  if(r.freq === 'weekdays') return '평일';
+  if(r.freq === 'weekly') return '매주 ' + (r.days||[]).map(d=>DAY_KO[d]).join('·');
+  if(r.freq === 'monthly') return '매월 ' + r.dom + '일';
+  return '';
+}
+
+/* ───────────────── 렌더링 ───────────────── */
+const $ = id => document.getElementById(id);
+const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let currentTab = 'today', taskFilter = 'active', editTaskId = null, editRoutineId = null, pickedDays = [];
+
+function render(){
+  const now = new Date(), ts = todayStr(now);
+  $('todayDate').textContent = ts + ' (' + DAY_KO[now.getDay()] + ')';
+
+  /* 오늘의 루틴 */
+  const due = state.routines.filter(r => r.active !== false && routineDueOn(r, now));
+  const log = state.routineLog[ts] || {};
+  const doneN = due.filter(r => log[r.id]).length;
+  $('routineHint').textContent = due.length ? '' : '루틴 탭에서 미리 등록해 두세요';
+  $('routineProg').textContent = doneN + '/' + due.length + ' 완료';
+  $('routineBar').style.width = due.length ? Math.round(doneN/due.length*100)+'%' : '0%';
+  $('todayRoutines').innerHTML = due.length ? due.map(r => `
+    <div class="card"><div class="row">
+      <button class="check ${log[r.id]?'on':''}" onclick="toggleRoutine('${r.id}')">${log[r.id]?'✓':''}</button>
+      <div class="body">
+        <div class="title ${log[r.id]?'through':''}">${esc(r.title)}</div>
+        <div class="meta"><span class="badge b-routine">${freqLabel(r)}</span>${r.counterpart?'<span>👤 '+esc(r.counterpart)+'</span>':''}</div>
+      </div>
+    </div></div>`).join('')
+    : '<div class="empty">오늘 표시될 루틴이 없습니다. 🔁 루틴 탭에서 추가하세요.</div>';
+
+  /* 오늘 챙길 업무 = 지연 + D-3 이내 + 진행중 */
+  const urgent = state.tasks.filter(t => {
+    if(t.status === 'done' || t.status === 'hold') return false;
+    if(t.status === 'doing') return true;
+    if(t.targetDate) return diffDays(ts, t.targetDate) <= 3;
+    return false;
+  }).sort((a,b) => (a.targetDate||'9999') < (b.targetDate||'9999') ? -1 : 1);
+  $('todayTasks').innerHTML = urgent.length ? urgent.map(taskCard).join('')
+    : '<div class="empty">임박하거나 진행중인 업무가 없습니다. 머리가 가볍네요 ✨</div>';
+
+  /* 업무 탭 */
+  const filters = [['active','진행·대기'],['late','지연'],['done','완료'],['hold','보류'],['all','전체']];
+  $('taskFilters').innerHTML = filters.map(([k,l]) => `<button class="${taskFilter===k?'on':''}" onclick="setFilter('${k}')">${l}</button>`).join('');
+  let list = state.tasks.slice().sort((a,b) => (a.targetDate||'9999') < (b.targetDate||'9999') ? -1 : 1);
+  if(taskFilter === 'active') list = list.filter(t => t.status==='todo'||t.status==='doing');
+  if(taskFilter === 'late') list = list.filter(t => t.status!=='done' && t.status!=='hold' && t.targetDate && t.targetDate < ts);
+  if(taskFilter === 'done') list = list.filter(t => t.status==='done');
+  if(taskFilter === 'hold') list = list.filter(t => t.status==='hold');
+  $('taskList').innerHTML = list.length ? list.map(taskCard).join('') : '<div class="empty">해당하는 업무가 없습니다. + 버튼으로 추가하세요.</div>';
+
+  /* 루틴 탭 */
+  $('routineList').innerHTML = state.routines.length ? state.routines.map(r => `
+    <div class="card"><div class="row">
+      <div class="body">
+        <div class="title" style="${r.active===false?'opacity:.45':''}">${esc(r.title)}</div>
+        <div class="meta"><span class="badge b-routine">${freqLabel(r)}</span>${r.counterpart?'<span>👤 '+esc(r.counterpart)+'</span>':''}</div>
+      </div>
+      <button class="btn-mini" onclick="toggleRoutineActive('${r.id}')">${r.active===false?'재개':'일시중지'}</button>
+      <button class="btn-mini accent" onclick="openRoutineModal('${r.id}')">수정</button>
+    </div></div>`).join('')
+    : '<div class="empty">등록된 루틴이 없습니다. + 버튼으로 추가하세요.</div>';
+
+  renderStats(ts);
+}
+
+function taskCard(t){
+  const ts = todayStr();
+  const isDone = t.status === 'done';
+  let dday = '';
+  if(t.targetDate && !isDone && t.status !== 'hold'){
+    const d = diffDays(ts, t.targetDate);
+    dday = d < 0 ? `<span class="badge b-late">${-d}일 지연</span>`
+         : d === 0 ? `<span class="badge b-dday">D-DAY</span>`
+         : `<span class="badge b-dday">D-${d}</span>`;
+  }
+  let result = '';
+  if(isDone && t.targetDate && t.actualDate){
+    const d = diffDays(t.targetDate, t.actualDate);
+    result = d > 0 ? `<span class="badge b-late">+${d}일 지연 완료</span>`
+           : d === 0 ? `<span class="badge b-done">기한 내 완료</span>`
+           : `<span class="badge b-done">${-d}일 조기 완료</span>`;
+  }
+  const stBadge = {todo:'<span class="badge b-todo">대기</span>', doing:'<span class="badge b-doing">진행중</span>', done:'<span class="badge b-done">완료</span>', hold:'<span class="badge b-hold">보류</span>'}[t.status];
+  return `
+    <div class="card"><div class="row">
+      <button class="check ${isDone?'on':''}" onclick="quickDone('${t.id}')" title="완료 처리">${isDone?'✓':''}</button>
+      <div class="body">
+        <div class="title ${isDone?'through':''}">${esc(t.title)}</div>
+        <div class="meta">
+          ${stBadge} ${dday} ${result}
+          ${t.counterpart ? '<span>👤 '+esc(t.counterpart)+'</span>' : ''}
+          ${t.targetDate ? '<span>🎯 '+t.targetDate+'</span>' : ''}
+          ${t.actualDate ? '<span>✅ '+t.actualDate+'</span>' : ''}
+        </div>
+        ${t.notes ? '<div class="meta" style="margin-top:5px">📝 '+esc(t.notes)+'</div>' : ''}
+      </div>
+      <button class="btn-mini accent" onclick="openTaskModal('${t.id}')">수정</button>
+    </div></div>`;
+}
+
+function renderStats(ts){
+  const active = state.tasks.filter(t => t.status==='todo'||t.status==='doing').length;
+  const late = state.tasks.filter(t => t.status!=='done' && t.status!=='hold' && t.targetDate && t.targetDate < ts).length;
+  const doneTasks = state.tasks.filter(t => t.status==='done' && t.targetDate && t.actualDate);
+  const onTime = doneTasks.filter(t => t.actualDate <= t.targetDate).length;
+  const rate = doneTasks.length ? Math.round(onTime/doneTasks.length*100) : null;
+  const avgSlip = doneTasks.length ? (doneTasks.reduce((s,t)=>s+diffDays(t.targetDate,t.actualDate),0)/doneTasks.length).toFixed(1) : null;
+  $('statCards').innerHTML = `
+    <div class="stat"><div class="num">${active}</div><div class="lab">진행·대기 업무</div></div>
+    <div class="stat"><div class="num ${late?'red':'green'}">${late}</div><div class="lab">지연 중</div></div>
+    <div class="stat"><div class="num ${rate===null?'':(rate>=70?'green':'red')}">${rate===null?'–':rate+'%'}</div><div class="lab">기한 준수율</div></div>
+    <div class="stat"><div class="num">${avgSlip===null?'–':(avgSlip>0?'+':'')+avgSlip+'일'}</div><div class="lab">평균 지연 (계획오류 지표)</div></div>`;
+  /* 최근 7일 루틴 */
+  let html = '';
+  for(let i = 6; i >= 0; i--){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const ds = todayStr(d);
+    const due = state.routines.filter(r => r.active!==false && routineDueOn(r,d));
+    const log = state.routineLog[ds] || {};
+    const n = due.filter(r=>log[r.id]).length;
+    const cls = due.length===0 ? '' : n===due.length ? 'full' : n>0 ? 'part' : '';
+    html += `<div class="day"><div class="dot ${cls}">${due.length? n+'/'+due.length : '–'}</div><div class="lab">${DAY_KO[d.getDay()]}</div></div>`;
+  }
+  $('weekView').innerHTML = html;
+}
+
+/* ───────────────── 동작 ───────────────── */
+function toggleRoutine(id){
+  const ts = todayStr();
+  state.routineLog[ts] = state.routineLog[ts] || {};
+  state.routineLog[ts][id] = !state.routineLog[ts][id];
+  save(); render();
+}
+function toggleRoutineActive(id){
+  const r = state.routines.find(r=>r.id===id);
+  r.active = r.active === false ? true : false;
+  save(); render();
+}
+function quickDone(id){
+  const t = state.tasks.find(t=>t.id===id);
+  if(t.status === 'done'){ t.status = 'doing'; t.actualDate = ''; }
+  else { t.status = 'done'; if(!t.actualDate) t.actualDate = todayStr(); }
+  save(); render();
+}
+function setFilter(f){ taskFilter = f; render(); }
+
+/* 탭 */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  currentTab = b.dataset.tab;
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active', x===b));
+  document.querySelectorAll('section.panel').forEach(p=>p.classList.toggle('active', p.id==='panel-'+currentTab));
+  $('fab').style.display = (currentTab==='today'||currentTab==='stats') ? 'none' : 'block';
+});
+$('fab').onclick = () => currentTab === 'routines' ? openRoutineModal() : openTaskModal();
+
+/* 모달 공통 */
+function closeModal(id){ $(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+
+/* 업무 모달 */
+function openTaskModal(id){
+  editTaskId = id || null;
+  $('taskModalTitle').textContent = id ? '업무 수정' : '업무 추가';
+  $('taskDeleteBtn').style.display = id ? 'block' : 'none';
+  const t = id ? state.tasks.find(t=>t.id===id) : {};
+  $('tTitle').value = t.title || ''; $('tCounterpart').value = t.counterpart || '';
+  $('tStatus').value = t.status || 'todo'; $('tTarget').value = t.targetDate || '';
+  $('tActual').value = t.actualDate || ''; $('tNotes').value = t.notes || '';
+  $('taskModal').classList.add('open'); $('tTitle').focus();
+}
+function saveTask(){
+  const title = $('tTitle').value.trim();
+  if(!title){ alert('업무명을 입력하세요.'); return; }
+  const data = { title, counterpart:$('tCounterpart').value.trim(), status:$('tStatus').value,
+    targetDate:$('tTarget').value, actualDate:$('tActual').value, notes:$('tNotes').value.trim() };
+  if(data.status === 'done' && !data.actualDate) data.actualDate = todayStr();
+  if(editTaskId){ Object.assign(state.tasks.find(t=>t.id===editTaskId), data); }
+  else { state.tasks.push(Object.assign({id:uid(), createdAt:todayStr()}, data)); }
+  save(); closeModal('taskModal'); render();
+}
+function deleteTask(){
+  if(!confirm('이 업무를 삭제할까요?')) return;
+  state.tasks = state.tasks.filter(t=>t.id!==editTaskId);
+  save(); closeModal('taskModal'); render();
+}
+
+/* 루틴 모달 */
+function buildDayPick(){
+  $('rDays').innerHTML = DAY_KO.map((d,i)=>`<button type="button" class="${pickedDays.includes(i)?'on':''}" onclick="toggleDay(${i})">${d}</button>`).join('');
+}
+function toggleDay(i){
+  pickedDays = pickedDays.includes(i) ? pickedDays.filter(x=>x!==i) : pickedDays.concat(i);
+  buildDayPick();
+}
+function onFreqChange(){
+  const f = $('rFreq').value;
+  $('rDaysField').style.display = f==='weekly' ? 'block':'none';
+  $('rDomField').style.display = f==='monthly' ? 'block':'none';
+}
+function openRoutineModal(id){
+  editRoutineId = id || null;
+  $('routineModalTitle').textContent = id ? '루틴 수정' : '루틴 추가';
+  $('routineDeleteBtn').style.display = id ? 'block' : 'none';
+  const r = id ? state.routines.find(r=>r.id===id) : {};
+  $('rTitle').value = r.title || ''; $('rFreq').value = r.freq || 'daily';
+  $('rDom').value = r.dom || 1; $('rCounterpart').value = r.counterpart || '';
+  pickedDays = (r.days || []).slice();
+  buildDayPick(); onFreqChange();
+  $('routineModal').classList.add('open'); $('rTitle').focus();
+}
+function saveRoutine(){
+  const title = $('rTitle').value.trim();
+  if(!title){ alert('루틴명을 입력하세요.'); return; }
+  const freq = $('rFreq').value;
+  if(freq==='weekly' && pickedDays.length===0){ alert('요일을 하나 이상 선택하세요.'); return; }
+  const data = { title, freq, days:pickedDays.slice(), dom:Math.min(31,Math.max(1,parseInt($('rDom').value)||1)), counterpart:$('rCounterpart').value.trim() };
+  if(editRoutineId){ Object.assign(state.routines.find(r=>r.id===editRoutineId), data); }
+  else { state.routines.push(Object.assign({id:uid(), active:true}, data)); }
+  save(); closeModal('routineModal'); render();
+}
+function deleteRoutine(){
+  if(!confirm('이 루틴을 삭제할까요? (과거 기록은 유지됩니다)')) return;
+  state.routines = state.routines.filter(r=>r.id!==editRoutineId);
+  save(); closeModal('routineModal'); render();
+}
+
+/* ───────────────── 시작 팝업: 오늘 챙길 것 ───────────────── */
+function showPopupIfNeeded(force){
+  const ts = todayStr();
+  if(!force && state.lastPopup === ts) return; // 하루 1회
+  const items = [];
+  const lateT = state.tasks.filter(t => t.status!=='done' && t.status!=='hold' && t.targetDate && t.targetDate < ts);
+  const dueT = state.tasks.filter(t => t.status!=='done' && t.status!=='hold' && t.targetDate && diffDays(ts,t.targetDate)>=0 && diffDays(ts,t.targetDate)<=1);
+  lateT.forEach(t => items.push(`<span class="badge b-late">${diffDays(t.targetDate,ts)}일 지연</span> ${esc(t.title)}${t.counterpart?' <small style="color:var(--sub)">· '+esc(t.counterpart)+'</small>':''}`));
+  dueT.forEach(t => items.push(`<span class="badge b-dday">${t.targetDate===ts?'오늘':'내일'} 마감</span> ${esc(t.title)}${t.counterpart?' <small style="color:var(--sub)">· '+esc(t.counterpart)+'</small>':''}`));
+  const now = new Date();
+  const due = state.routines.filter(r => r.active!==false && routineDueOn(r, now));
+  const log = state.routineLog[ts] || {};
+  const undone = due.filter(r=>!log[r.id]);
+  if(undone.length) items.push(`<span class="badge b-routine">루틴</span> 오늘 루틴 ${undone.length}개 대기: ${undone.slice(0,3).map(r=>esc(r.title)).join(', ')}${undone.length>3?' 외':''}`);
+  if(!items.length) return;
+  $('popupList').innerHTML = items.map(i=>'<li>'+i+'</li>').join('');
+  $('popup').classList.add('open');
+  state.lastPopup = ts; save();
+}
+function closePopup(){ closeModal('popup'); }
+
+/* ───────────────── 백업 ───────────────── */
+function exportData(){
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'today-three-backup-' + todayStr() + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importData(ev){
+  const f = ev.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const d = JSON.parse(reader.result);
+      if(!d.tasks && !d.routines) throw 0;
+      if(confirm('현재 데이터를 백업 파일로 교체할까요?')){ state = Object.assign({routines:[],routineLog:{},tasks:[],lastPopup:''}, d); save(); render(); }
+    }catch(e){ alert('올바른 백업 파일이 아닙니다.'); }
+  };
+  reader.readAsText(f); ev.target.value = '';
+}
+
+/* ───────────────── 부팅 ───────────────── */
+load(); render(); showPopupIfNeeded(false);
+/* 날짜가 바뀐 채 앱이 떠 있을 때 자동 갱신 */
+setInterval(() => { const d = $('todayDate').textContent.slice(0,10); if(d && d !== todayStr()){ render(); showPopupIfNeeded(false); } }, 60000);
+/* 네트워크 상태 표시 */
+function netTag(){ $('netState').textContent = navigator.onLine ? '온라인 (서버 불필요)' : '오프라인 동작 중'; }
+addEventListener('online', netTag); addEventListener('offline', netTag); netTag();
+/* 서비스 워커 등록 → 완전 오프라인 */
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+</script>
+</body>
+</html>
