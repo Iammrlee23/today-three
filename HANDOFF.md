@@ -59,7 +59,8 @@ today-three/
     notes: string,
     createdAt: "YYYY-MM-DD"
   }],
-  lastPopup: "YYYY-MM-DD"  // "오늘 챙길 것" 팝업 하루 1회 제어
+  lastPopup: "YYYY-MM-DD",  // "오늘 챙길 것" 팝업 하루 1회 제어
+  lastBackup: "YYYY-MM-DD"  // 마지막 JSON 내보내기일 — 30일 경과 시 팝업 리마인더
 }
 ```
 
@@ -132,8 +133,8 @@ bubblewrap build
 
 | 우선순위 | 항목 | 비고 |
 |---|---|---|
-| 상 | routineLog 보존 기간 정책 (예: 180일 초과분 자동 정리) | localStorage 한도 대비 |
-| 상 | 데이터 자동 백업 리마인더 (월 1회 팝업 등) | 기기 분실 대비 |
+| ~~상~~ 완료 | routineLog 보존 기간 정책 | load()에서 180일 초과분 자동 정리 (`LOG_KEEP_DAYS`) |
+| ~~상~~ 완료 | 데이터 백업 리마인더 | 마지막 백업 30일 경과(또는 미백업+항목 5개 이상) 시 팝업 |
 | 중 | 푸시 알림 | 현재는 앱 실행 시 팝업만. 로컬 알림은 APK(TWA)에서 제약 있어 Capacitor 전환 검토 필요 |
 | 중 | 업무 정렬·검색, 카운터파트별 필터 | 업무 수 증가 대비 |
 | 중 | localStorage → IndexedDB 전환 | 데이터 대용량화 시 |

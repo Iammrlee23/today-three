@@ -288,8 +288,13 @@ section.panel.active{display:block}
 <script>
 /* ───────────────── 데이터 계층 ───────────────── */
 const KEY = 'todaythree:v1';
-let state = { routines: [], routineLog: {}, tasks: [], lastPopup: '' };
-function load(){ try{ const s = localStorage.getItem(KEY); if(s) state = Object.assign(state, JSON.parse(s)); }catch(e){} }
+let state = { routines: [], routineLog: {}, tasks: [], lastPopup: '', lastBackup: '' };
+const LOG_KEEP_DAYS = 180; // routineLog 보존 기간 — localStorage 한도(약 5MB) 대비
+function load(){
+  try{ const s = localStorage.getItem(KEY); if(s) state = Object.assign(state, JSON.parse(s)); }catch(e){}
+  const cutoff = todayStr(new Date(Date.now() - LOG_KEEP_DAYS*86400000));
+  Object.keys(state.routineLog).forEach(k => { if(k < cutoff) delete state.routineLog[k]; });
+}
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ alert('저장 공간이 부족합니다. 기록 탭에서 백업 후 오래된 데이터를 정리하세요.'); } }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
@@ -586,6 +591,13 @@ function showPopupIfNeeded(force){
   const log = state.routineLog[ts] || {};
   const undone = due.filter(r=>!log[r.id]);
   if(undone.length) items.push(`<span class="badge b-routine">루틴</span> 오늘 루틴 ${undone.length}개 대기: ${undone.slice(0,3).map(r=>esc(r.title)).join(', ')}${undone.length>3?' 외':''}`);
+  /* 백업 리마인더 — 기기 분실·브라우저 데이터 삭제 대비 */
+  const itemCount = state.tasks.length + state.routines.length;
+  if(itemCount > 0){
+    const since = state.lastBackup ? diffDays(state.lastBackup, ts) : null;
+    if(since !== null ? since >= 30 : itemCount >= 5)
+      items.push(`<span class="badge b-hold">백업</span> ${since !== null ? '마지막 백업 후 '+since+'일 경과' : '아직 백업한 적이 없습니다'} — 기록 탭에서 JSON 내보내기`);
+  }
   if(!items.length) return;
   $('popupList').innerHTML = items.map(i=>'<li>'+i+'</li>').join('');
   $('popup').classList.add('open');
@@ -600,6 +612,7 @@ function exportData(){
   a.href = URL.createObjectURL(blob);
   a.download = 'today-three-backup-' + todayStr() + '.json';
   a.click(); URL.revokeObjectURL(a.href);
+  state.lastBackup = todayStr(); save();
 }
 function importData(ev){
   const f = ev.target.files[0]; if(!f) return;
@@ -608,7 +621,7 @@ function importData(ev){
     try{
       const d = JSON.parse(reader.result);
       if(!d.tasks && !d.routines) throw 0;
-      if(confirm('현재 데이터를 백업 파일로 교체할까요?')){ state = Object.assign({routines:[],routineLog:{},tasks:[],lastPopup:''}, d); save(); render(); }
+      if(confirm('현재 데이터를 백업 파일로 교체할까요?')){ state = Object.assign({routines:[],routineLog:{},tasks:[],lastPopup:'',lastBackup:''}, d); save(); render(); }
     }catch(e){ alert('올바른 백업 파일이 아닙니다.'); }
   };
   reader.readAsText(f); ev.target.value = '';
