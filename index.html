@@ -127,6 +127,29 @@ section.panel.active{display:block}
 .upcoming li:last-child{border:none}
 .upcoming .ud{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:8px;padding:3px 8px;white-space:nowrap}
 
+/* 캘린더 */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-nav h3{font-size:15px;font-weight:700}
+.cal-nav .btn-mini{font-size:16px;padding:4px 10px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{text-align:center;font-size:11px;font-weight:700;color:var(--sub);padding:4px 0}
+.cal-dow:first-child{color:var(--warn)}
+.cal-cell{background:var(--card);border:1px solid var(--line);border-radius:10px;min-height:58px;padding:4px;cursor:pointer;display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.cal-cell.dim{opacity:.35}
+.cal-cell.today{border:2px solid var(--accent)}
+.cal-cell.sel{background:var(--accent-soft)}
+.cal-cell .dnum{font-weight:700;font-size:12px}
+.cal-chip{font-size:10px;font-weight:700;border-radius:6px;padding:1px 4px;background:#F0EFE8;color:var(--sub);white-space:nowrap;align-self:flex-start}
+.cal-chip.c-green{background:var(--done-soft);color:var(--done)}
+.cal-chip.c-red{background:var(--warn-soft);color:var(--warn)}
+.cal-chip.c-blue{background:var(--accent-soft);color:var(--accent)}
+.cal-item{padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cal-item:last-child{border:none}
+.ci-done{color:var(--done);font-weight:700}
+.ci-todo{color:var(--sub)}
+.wk-head{font-size:13px;font-weight:700;margin-bottom:4px}
+.wk-head.on{color:var(--accent)}
+
 .filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .filter-row button{font-family:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--sub);cursor:pointer}
 .filter-row button.on{background:var(--ink);border-color:var(--ink);color:#fff}
@@ -163,7 +186,20 @@ section.panel.active{display:block}
     <div id="taskList"></div>
   </section>
 
-  <!-- ③ 루틴 관리 -->
+  <!-- ③ 캘린더 -->
+  <section class="panel" id="panel-calendar">
+    <div class="sec-head"><h2>캘린더</h2><span class="hint">루틴 · 업무 목표일 한눈에</span></div>
+    <div class="filter-row" id="calModeBtns"></div>
+    <div class="cal-nav">
+      <button class="btn-mini" onclick="calMove(-1)" aria-label="이전">←</button>
+      <h3 id="calTitle"></h3>
+      <div><button class="btn-mini accent" onclick="calToday()">오늘</button><button class="btn-mini" onclick="calMove(1)" aria-label="다음">→</button></div>
+    </div>
+    <div id="calBody"></div>
+    <div id="calDetail"></div>
+  </section>
+
+  <!-- ④ 루틴 관리 -->
   <section class="panel" id="panel-routines">
     <div class="sec-head"><h2>루틴 관리</h2><span class="hint">미리 등록하면 해당 날짜에 자동 표시</span></div>
     <div id="routineList"></div>
@@ -209,6 +245,7 @@ section.panel.active{display:block}
 <nav>
   <button class="active" data-tab="today"><span class="ico">☀️</span>오늘</button>
   <button data-tab="tasks"><span class="ico">📋</span>업무</button>
+  <button data-tab="calendar"><span class="ico">📆</span>캘린더</button>
   <button data-tab="routines"><span class="ico">🔁</span>루틴</button>
   <button data-tab="stats"><span class="ico">📈</span>기록</button>
 </nav>
@@ -332,6 +369,7 @@ function freqLabel(r){
 const $ = id => document.getElementById(id);
 const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let currentTab = 'today', taskFilter = 'active', editTaskId = null, editRoutineId = null, pickedDays = [];
+let calMode = 'month', calAnchor = null, calSel = '';
 
 function render(){
   const now = new Date(), ts = todayStr(now);
@@ -409,8 +447,78 @@ function render(){
     </div></div>`).join('')
     : '<div class="empty">등록된 루틴이 없습니다. + 버튼으로 추가하세요.</div>';
 
+  renderCalendar();
   renderStats(ts);
 }
+
+/* ───────────────── 캘린더 ───────────────── */
+function dayItemsHtml(ds){
+  const d = new Date(ds + 'T00:00'), ts = todayStr();
+  const due = state.routines.filter(r => r.active !== false && routineDueOn(r, d));
+  const log = state.routineLog[ds] || {};
+  const tks = state.tasks.filter(t => t.targetDate === ds);
+  let rows = '';
+  due.forEach(r => {
+    rows += `<div class="cal-item"><span class="${log[r.id]?'ci-done':'ci-todo'}">${log[r.id]?'✓':'○'}</span> ${esc(r.title)} <span class="badge b-routine">${freqLabel(r)}</span></div>`;
+  });
+  tks.forEach(t => {
+    const st = {todo:'b-todo',doing:'b-doing',done:'b-done',hold:'b-hold'}[t.status];
+    const stL = {todo:'대기',doing:'진행중',done:'완료',hold:'보류'}[t.status];
+    const late = t.status !== 'done' && t.status !== 'hold' && ds < ts;
+    rows += `<div class="cal-item" style="cursor:pointer" onclick="openTaskModal('${t.id}')">🎯 ${esc(t.title)} <span class="badge ${st}">${stL}</span>${late?'<span class="badge b-late">지연</span>':''}${t.counterpart?'<span style="color:var(--sub);font-size:12px">👤 '+esc(t.counterpart)+'</span>':''}</div>`;
+  });
+  return rows || '<div class="cal-item" style="color:var(--sub)">예정 없음</div>';
+}
+function renderCalendar(){
+  const now = new Date(), ts = todayStr(now);
+  if(!calAnchor) calAnchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  $('calModeBtns').innerHTML = [['month','월간'],['week','주간']].map(([k,l]) =>
+    `<button class="${calMode===k?'on':''}" onclick="setCalMode('${k}')">${l}</button>`).join('');
+  if(calMode === 'month'){
+    const y = calAnchor.getFullYear(), m = calAnchor.getMonth();
+    $('calTitle').textContent = y + '년 ' + (m+1) + '월';
+    const start = new Date(y, m, 1 - new Date(y, m, 1).getDay()); // 1일이 속한 주의 일요일
+    let cells = DAY_KO.map(d => `<div class="cal-dow">${d}</div>`).join('');
+    for(let i = 0; i < 42; i++){
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const ds = todayStr(d);
+      const due = state.routines.filter(r => r.active !== false && routineDueOn(r, d));
+      const log = state.routineLog[ds] || {};
+      const rDone = due.filter(r => log[r.id]).length;
+      const tks = state.tasks.filter(t => t.targetDate === ds);
+      const tLate = ds < ts && tks.some(t => t.status !== 'done' && t.status !== 'hold');
+      const tAllDone = tks.length > 0 && tks.every(t => t.status === 'done');
+      let marks = '';
+      if(due.length) marks += `<span class="cal-chip ${rDone===due.length?'c-green':''}">🔁${rDone}/${due.length}</span>`;
+      if(tks.length) marks += `<span class="cal-chip ${tAllDone?'c-green':tLate?'c-red':'c-blue'}">📋${tks.length}</span>`;
+      cells += `<div class="cal-cell ${d.getMonth()!==m?'dim':''} ${ds===ts?'today':''} ${ds===calSel?'sel':''}" onclick="calSelect('${ds}')"><span class="dnum">${d.getDate()}</span>${marks}</div>`;
+    }
+    $('calBody').innerHTML = `<div class="cal-grid">${cells}</div>`;
+    $('calDetail').innerHTML = calSel
+      ? `<div class="sec-head"><h2>${calSel} (${DAY_KO[new Date(calSel+'T00:00').getDay()]})</h2></div><div class="card">${dayItemsHtml(calSel)}</div>`
+      : '<div class="empty" style="margin-top:12px">날짜를 누르면 그날의 루틴·업무가 표시됩니다.</div>';
+  } else {
+    const start = new Date(calAnchor); start.setDate(calAnchor.getDate() - calAnchor.getDay()); // 일요일 시작
+    const end = new Date(start); end.setDate(start.getDate() + 6);
+    $('calTitle').textContent = `${start.getMonth()+1}/${start.getDate()} – ${end.getMonth()+1}/${end.getDate()}`;
+    let html = '';
+    for(let i = 0; i < 7; i++){
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const ds = todayStr(d);
+      html += `<div class="card"><div class="wk-head ${ds===ts?'on':''}">${d.getMonth()+1}/${d.getDate()} (${DAY_KO[d.getDay()]})${ds===ts?' · 오늘':''}</div>${dayItemsHtml(ds)}</div>`;
+    }
+    $('calBody').innerHTML = html;
+    $('calDetail').innerHTML = '';
+  }
+}
+function setCalMode(m){ calMode = m; render(); }
+function calSelect(ds){ calSel = calSel === ds ? '' : ds; render(); }
+function calMove(dir){
+  if(calMode === 'month') calAnchor = new Date(calAnchor.getFullYear(), calAnchor.getMonth() + dir, 1);
+  else calAnchor.setDate(calAnchor.getDate() + 7 * dir);
+  render();
+}
+function calToday(){ const n = new Date(); calAnchor = new Date(n.getFullYear(), n.getMonth(), n.getDate()); calSel = todayStr(); render(); }
 
 function taskCard(t){
   const ts = todayStr();

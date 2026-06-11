@@ -1,5 +1,5 @@
 /* 오늘, 셋 — 오프라인 캐시 서비스 워커 */
-const CACHE = 'today-three-v3';
+const CACHE = 'today-three-v4';
 const ASSETS = ['./', './index.html', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
