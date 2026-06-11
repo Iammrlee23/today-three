@@ -39,9 +39,10 @@ today-three/
   routines: [{
     id: string,
     title: string,
-    freq: "daily" | "weekdays" | "weekly" | "monthly",
+    freq: "daily" | "weekdays" | "weekly" | "monthly" | "yearly",
     days: number[],        // weekly일 때 요일 (0=일 … 6=토)
-    dom: number,           // monthly일 때 일자 (1–31)
+    dom: number,           // monthly/yearly일 때 일자 (1–31)
+    month: number,         // yearly일 때 월 (1–12)
     counterpart: string,
     active: boolean        // false = 일시중지 (기본 true)
   }],
@@ -63,7 +64,12 @@ today-three/
 ```
 
 마이그레이션 정책: 스키마 변경 시 키를 `todaythree:v2`로 올리고
-load()에서 v1 → v2 변환 코드를 추가할 것. (현재 v1)
+load()에서 v1 → v2 변환 코드를 추가할 것. (현재 v1 — yearly/month 추가는
+기존 데이터에 영향 없는 additive 변경이라 키 유지)
+
+별도 키 `todaythree:pin`: 화면 잠금 PIN의 해시(SHA-256, 비보안 컨텍스트에서는
+djb2 폴백). 의도적으로 state 밖에 두어 JSON 백업/복원에 포함되지 않음 (기기별 잠금).
+클라이언트 측 잠금이므로 "기기를 만지는 타인 차단" 용도이며 암호학적 보호가 아님.
 
 ## 4. 핵심 함수 맵 (index.html 내 <script>)
 
@@ -71,7 +77,8 @@ load()에서 v1 → v2 변환 코드를 추가할 것. (현재 v1)
 |---|---|---|
 | 데이터 | `load()` / `save()` | localStorage 입출력. save 실패 시 alert |
 | 날짜 | `todayStr()`, `diffDays(a,b)` | 로컬 타임존 기준 YYYY-MM-DD, 일수 차 |
-| 루틴 | `routineDueOn(r, date)` | 해당 날짜 표시 여부. **monthly는 말일 클램핑** (31일 설정 + 2월 → 말일 표시) |
+| 루틴 | `routineDueOn(r, date)` | 해당 날짜 표시 여부. **monthly/yearly는 말일 클램핑** (2/30 설정 + 평년 → 2/28 표시) |
+| 잠금 | `hashPin`, `unlock`, `setPin`, `removePin`, `updatePinUI` | 화면 잠금. 해시는 `todaythree:pin` 키 (백업 미포함) |
 | 렌더 | `render()` | 전체 4개 탭 일괄 리렌더 (상태 변경마다 호출) |
 | 렌더 | `taskCard(t)` | 업무 카드. D-day / 지연 / 조기·지연 완료 배지 계산 |
 | 렌더 | `renderStats(ts)` | 기한 준수율, 평균 지연일, 최근 7일 루틴 달성 |
@@ -135,6 +142,12 @@ bubblewrap build
 
 ## 8. 보안·정보 참고
 
+- **멀티유저 구조**: 서버·계정 없음. 접속자마다 자기 기기 localStorage에 독립 저장 →
+  URL을 아는 외부인이 접속해도 빈 앱만 보이며 타인의 데이터는 절대 볼 수 없음.
+  반대로 기기 간 동기화도 없음 (JSON 내보내기/가져오기로 수동 이전)
+- **화면 잠금(PIN)**: 같은 기기를 쓰는 타인으로부터 보호. 기록 탭에서 설정.
+  클라이언트 측 잠금이라 개발자도구로 우회 가능 — 억제책이지 암호화가 아님.
+  데이터 자체 암호화가 필요해지면 WebCrypto AES-GCM + PIN 유도키 도입 검토
 - 모든 데이터는 사용자 기기에만 저장되며 어떤 서버로도 전송되지 않음 (네트워크 호출 코드 없음, SW의 fetch는 자체 정적 자산 캐싱용)
 - 단, localStorage는 평문 저장이므로 **대외비·개인정보가 포함된 업무명/메모 입력은 지양**하도록 사용 안내 권장
 - 공용 PC 브라우저 사용 금지 안내 권장

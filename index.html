@@ -111,6 +111,22 @@ section.panel.active{display:block}
 .week .day .dot.part{background:#A8DCC8;color:#0B5E43}
 .week .day .lab{font-size:10px;color:var(--sub)}
 
+/* 잠금 화면 */
+#lockScreen{position:fixed;inset:0;background:var(--paper);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
+#lockScreen h1{font-size:26px;font-weight:800}
+#lockScreen p{font-size:13px;color:var(--sub)}
+#lockScreen input{width:180px;padding:12px;border:1px solid var(--line);border-radius:12px;font-size:22px;text-align:center;letter-spacing:.4em;font-family:inherit;background:var(--card)}
+#lockMsg{color:var(--warn);font-size:12px;min-height:16px}
+
+/* 오늘 탭 그룹 라벨 */
+.group-label{font-size:12px;font-weight:700;color:var(--sub);margin:14px 0 6px;letter-spacing:.04em}
+.group-label:first-child{margin-top:0}
+
+/* 다가오는 일정 */
+.upcoming li{list-style:none;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px;display:flex;gap:10px;align-items:center}
+.upcoming li:last-child{border:none}
+.upcoming .ud{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:8px;padding:3px 8px;white-space:nowrap}
+
 .filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .filter-row button{font-family:inherit;font-size:12px;font-weight:600;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--sub);cursor:pointer}
 .filter-row button.on{background:var(--ink);border-color:var(--ink);color:#fff}
@@ -133,8 +149,11 @@ section.panel.active{display:block}
     <div class="bar"><div id="routineBar" style="width:0%"></div></div>
     <div id="todayRoutines"></div>
 
-    <div class="sec-head"><h2>오늘 챙길 업무</h2><span class="hint">마감 임박 · 지연 · 진행중</span></div>
+    <div class="sec-head"><h2>오늘 챙길 업무</h2><span class="hint">지연 → 오늘 마감 → 임박 → 진행중 순</span></div>
     <div id="todayTasks"></div>
+
+    <div class="sec-head"><h2>다가오는 루틴 일정</h2><span class="hint">14일 내 주간·월간·연간 일정</span></div>
+    <div class="card"><ul class="upcoming" id="upcomingList"></ul></div>
   </section>
 
   <!-- ② 업무 -->
@@ -162,6 +181,12 @@ section.panel.active{display:block}
       <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">JSON 가져오기</button>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
     </div>
+    <div class="sec-head"><h2>화면 잠금</h2><span class="hint">이 기기에서 앱을 열 때 PIN 요구</span></div>
+    <div class="card" style="display:flex;gap:10px;align-items:center">
+      <button class="btn btn-ghost" id="pinSetBtn" onclick="setPin()">PIN 설정</button>
+      <button class="btn btn-ghost" id="pinOffBtn" onclick="removePin()" style="display:none;color:var(--warn)">PIN 해제</button>
+      <span class="hint" id="pinState"></span>
+    </div>
     <div class="foot">
       설계 근거: 외부 기록은 미완료 과제의 침투적 사고를 줄이고(Zeigarnik 1927; Masicampo &amp; Baumeister 2011),
       앱 시작 시 팝업은 회상 시점을 행동 시점과 연결하는 실행 의도 원리(Gollwitzer 1999)를 따릅니다.
@@ -171,6 +196,15 @@ section.panel.active{display:block}
 </div>
 
 <button class="fab" id="fab" title="추가">+</button>
+
+<!-- 잠금 화면 -->
+<div id="lockScreen">
+  <h1>오늘, 셋.</h1>
+  <p>PIN을 입력하세요</p>
+  <input type="password" inputmode="numeric" autocomplete="off" id="lockPin" maxlength="8" aria-label="PIN 입력">
+  <button class="btn btn-primary" style="padding:11px 32px" onclick="unlock()">열기</button>
+  <div id="lockMsg"></div>
+</div>
 
 <nav>
   <button class="active" data-tab="today"><span class="ico">☀️</span>오늘</button>
@@ -228,13 +262,19 @@ section.panel.active{display:block}
         <option value="weekdays">평일 (월–금)</option>
         <option value="weekly">매주 특정 요일</option>
         <option value="monthly">매월 특정 일</option>
+        <option value="yearly">매년 특정 월·일 (연간 일정)</option>
       </select>
     </div>
     <div class="field" id="rDaysField" style="display:none"><label>요일 선택</label>
       <div class="daypick" id="rDays"></div>
     </div>
-    <div class="field" id="rDomField" style="display:none"><label>매월 며칠 (1–31)</label>
-      <input type="number" id="rDom" min="1" max="31" value="1">
+    <div class="field-row">
+      <div class="field" id="rMonthField" style="display:none"><label>몇 월</label>
+        <select id="rMonth"></select>
+      </div>
+      <div class="field" id="rDomField" style="display:none"><label>며칠 (1–31)</label>
+        <input type="number" id="rDom" min="1" max="31" value="1">
+      </div>
     </div>
     <div class="field"><label>관련 카운터파트 (선택)</label><input id="rCounterpart" placeholder="예: 공무팀"></div>
     <div class="modal-actions">
@@ -267,6 +307,11 @@ function routineDueOn(r, date){
     const last = new Date(date.getFullYear(), date.getMonth()+1, 0).getDate();
     return date.getDate() === Math.min(r.dom || 1, last); // 31일 설정 + 30일까지 있는 달 → 말일 처리
   }
+  if(r.freq === 'yearly'){
+    if(date.getMonth()+1 !== (r.month || 1)) return false;
+    const last = new Date(date.getFullYear(), r.month || 1, 0).getDate();
+    return date.getDate() === Math.min(r.dom || 1, last); // 2/29 설정 + 평년 → 2/28 처리
+  }
   return false;
 }
 function freqLabel(r){
@@ -274,6 +319,7 @@ function freqLabel(r){
   if(r.freq === 'weekdays') return '평일';
   if(r.freq === 'weekly') return '매주 ' + (r.days||[]).map(d=>DAY_KO[d]).join('·');
   if(r.freq === 'monthly') return '매월 ' + r.dom + '일';
+  if(r.freq === 'yearly') return '매년 ' + (r.month||1) + '월 ' + (r.dom||1) + '일';
   return '';
 }
 
@@ -303,15 +349,38 @@ function render(){
     </div></div>`).join('')
     : '<div class="empty">오늘 표시될 루틴이 없습니다. 🔁 루틴 탭에서 추가하세요.</div>';
 
-  /* 오늘 챙길 업무 = 지연 + D-3 이내 + 진행중 */
+  /* 오늘 챙길 업무 — 지연 / 오늘 마감 / 임박 / 진행중 그룹 */
   const urgent = state.tasks.filter(t => {
     if(t.status === 'done' || t.status === 'hold') return false;
     if(t.status === 'doing') return true;
     if(t.targetDate) return diffDays(ts, t.targetDate) <= 3;
     return false;
   }).sort((a,b) => (a.targetDate||'9999') < (b.targetDate||'9999') ? -1 : 1);
-  $('todayTasks').innerHTML = urgent.length ? urgent.map(taskCard).join('')
-    : '<div class="empty">임박하거나 진행중인 업무가 없습니다. 머리가 가볍네요 ✨</div>';
+  const grp = { late:[], today:[], soon:[], doing:[] };
+  urgent.forEach(t => {
+    if(t.targetDate && t.targetDate < ts) grp.late.push(t);
+    else if(t.targetDate === ts) grp.today.push(t);
+    else if(t.targetDate && diffDays(ts, t.targetDate) <= 3) grp.soon.push(t);
+    else grp.doing.push(t);
+  });
+  const groupHtml = [['late','🔥 지연 — 먼저 처리'],['today','⏰ 오늘 마감'],['soon','📅 임박 (D-3 이내)'],['doing','▶ 진행중 (목표일 없음)']]
+    .filter(([k]) => grp[k].length)
+    .map(([k,label]) => `<div class="group-label">${label} · ${grp[k].length}건</div>` + grp[k].map(taskCard).join(''))
+    .join('');
+  $('todayTasks').innerHTML = groupHtml || '<div class="empty">임박하거나 진행중인 업무가 없습니다. 머리가 가볍네요 ✨</div>';
+
+  /* 다가오는 루틴 일정 (내일~14일, 매일·평일 제외) */
+  const upcoming = [];
+  for(let i = 1; i <= 14; i++){
+    const d = new Date(now); d.setDate(now.getDate()+i);
+    state.routines.filter(r => r.active !== false && (r.freq==='weekly'||r.freq==='monthly'||r.freq==='yearly') && routineDueOn(r, d))
+      .forEach(r => upcoming.push({ d, r }));
+  }
+  $('upcomingList').innerHTML = upcoming.length ? upcoming.map(({d,r}) => `
+    <li><span class="ud">${d.getMonth()+1}/${d.getDate()} (${DAY_KO[d.getDay()]}) · D-${diffDays(ts, todayStr(d))}</span>
+      <span>${esc(r.title)}</span>
+      <span class="badge b-routine">${freqLabel(r)}</span></li>`).join('')
+    : '<li style="color:var(--sub)">14일 내 예정된 주간·월간·연간 루틴이 없습니다.</li>';
 
   /* 업무 탭 */
   const filters = [['active','진행·대기'],['late','지연'],['done','완료'],['hold','보류'],['all','전체']];
@@ -470,15 +539,18 @@ function toggleDay(i){
 function onFreqChange(){
   const f = $('rFreq').value;
   $('rDaysField').style.display = f==='weekly' ? 'block':'none';
-  $('rDomField').style.display = f==='monthly' ? 'block':'none';
+  $('rDomField').style.display = (f==='monthly'||f==='yearly') ? 'block':'none';
+  $('rMonthField').style.display = f==='yearly' ? 'block':'none';
 }
+$('rMonth').innerHTML = Array.from({length:12}, (_,i)=>`<option value="${i+1}">${i+1}월</option>`).join('');
 function openRoutineModal(id){
   editRoutineId = id || null;
   $('routineModalTitle').textContent = id ? '루틴 수정' : '루틴 추가';
   $('routineDeleteBtn').style.display = id ? 'block' : 'none';
   const r = id ? state.routines.find(r=>r.id===id) : {};
   $('rTitle').value = r.title || ''; $('rFreq').value = r.freq || 'daily';
-  $('rDom').value = r.dom || 1; $('rCounterpart').value = r.counterpart || '';
+  $('rDom').value = r.dom || 1; $('rMonth').value = r.month || 1;
+  $('rCounterpart').value = r.counterpart || '';
   pickedDays = (r.days || []).slice();
   buildDayPick(); onFreqChange();
   $('routineModal').classList.add('open'); $('rTitle').focus();
@@ -488,7 +560,8 @@ function saveRoutine(){
   if(!title){ alert('루틴명을 입력하세요.'); return; }
   const freq = $('rFreq').value;
   if(freq==='weekly' && pickedDays.length===0){ alert('요일을 하나 이상 선택하세요.'); return; }
-  const data = { title, freq, days:pickedDays.slice(), dom:Math.min(31,Math.max(1,parseInt($('rDom').value)||1)), counterpart:$('rCounterpart').value.trim() };
+  const data = { title, freq, days:pickedDays.slice(), dom:Math.min(31,Math.max(1,parseInt($('rDom').value)||1)),
+    month:Math.min(12,Math.max(1,parseInt($('rMonth').value)||1)), counterpart:$('rCounterpart').value.trim() };
   if(editRoutineId){ Object.assign(state.routines.find(r=>r.id===editRoutineId), data); }
   else { state.routines.push(Object.assign({id:uid(), active:true}, data)); }
   save(); closeModal('routineModal'); render();
@@ -541,8 +614,64 @@ function importData(ev){
   reader.readAsText(f); ev.target.value = '';
 }
 
+/* ───────────────── 화면 잠금 (PIN) ─────────────────
+   주의: 클라이언트 측 잠금으로, 이 기기에서 타인이 화면을 여는 것을 막는 용도.
+   해시는 이 기기 localStorage에만 저장되며 백업 파일에는 포함되지 않음. */
+const PIN_KEY = 'todaythree:pin';
+async function hashPin(p){
+  const s = 'todaythree:' + p;
+  try{
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(e){ /* file:// 등 비보안 컨텍스트 폴백 */
+    let h = 5381;
+    for(let i=0;i<s.length;i++) h = ((h<<5)+h+s.charCodeAt(i))>>>0;
+    return 'f' + h.toString(16);
+  }
+}
+async function unlock(){
+  const v = $('lockPin').value;
+  if(v && await hashPin(v) === localStorage.getItem(PIN_KEY)){
+    $('lockScreen').style.display = 'none'; $('lockPin').value = ''; $('lockMsg').textContent = '';
+    showPopupIfNeeded(false);
+  } else {
+    $('lockMsg').textContent = 'PIN이 일치하지 않습니다.';
+    $('lockPin').value = ''; $('lockPin').focus();
+  }
+}
+$('lockPin').addEventListener('keydown', e => { if(e.key === 'Enter') unlock(); });
+async function setPin(){
+  const cur = localStorage.getItem(PIN_KEY);
+  if(cur){
+    const old = prompt('현재 PIN을 입력하세요.');
+    if(old === null) return;
+    if(await hashPin(old) !== cur){ alert('PIN이 일치하지 않습니다.'); return; }
+  }
+  const p1 = prompt('새 PIN (숫자 4–8자리)을 입력하세요.');
+  if(p1 === null) return;
+  if(!/^\d{4,8}$/.test(p1)){ alert('숫자 4–8자리로 입력하세요.'); return; }
+  const p2 = prompt('확인을 위해 한 번 더 입력하세요.');
+  if(p2 !== p1){ alert('두 입력이 일치하지 않습니다.'); return; }
+  localStorage.setItem(PIN_KEY, await hashPin(p1));
+  updatePinUI(); alert('PIN이 설정되었습니다. 다음 실행부터 잠금 화면이 표시됩니다.');
+}
+async function removePin(){
+  const old = prompt('현재 PIN을 입력하세요.');
+  if(old === null) return;
+  if(await hashPin(old) !== localStorage.getItem(PIN_KEY)){ alert('PIN이 일치하지 않습니다.'); return; }
+  localStorage.removeItem(PIN_KEY); updatePinUI(); alert('잠금이 해제되었습니다.');
+}
+function updatePinUI(){
+  const on = !!localStorage.getItem(PIN_KEY);
+  $('pinSetBtn').textContent = on ? 'PIN 변경' : 'PIN 설정';
+  $('pinOffBtn').style.display = on ? 'block' : 'none';
+  $('pinState').textContent = on ? '잠금 사용 중' : '설정 안 함';
+}
+
 /* ───────────────── 부팅 ───────────────── */
-load(); render(); showPopupIfNeeded(false);
+load(); render(); updatePinUI();
+if(localStorage.getItem(PIN_KEY)){ $('lockScreen').style.display = 'flex'; $('lockPin').focus(); }
+else showPopupIfNeeded(false);
 /* 날짜가 바뀐 채 앱이 떠 있을 때 자동 갱신 */
 setInterval(() => { const d = $('todayDate').textContent.slice(0,10); if(d && d !== todayStr()){ render(); showPopupIfNeeded(false); } }, 60000);
 /* 네트워크 상태 표시 */
