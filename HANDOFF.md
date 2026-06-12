@@ -39,7 +39,7 @@ today-three/
   routines: [{
     id: string,
     title: string,
-    freq: "daily" | "weekdays" | "weekly" | "monthly" | "yearly",
+    freq: "daily" | "weekdays" | "weekly" | "monthly" | "monthfirst" | "monthlast" | "yearly",
     days: number[],        // weekly일 때 요일 (0=일 … 6=토)
     dom: number,           // monthly/yearly일 때 일자 (1–31)
     month: number,         // yearly일 때 월 (1–12)
