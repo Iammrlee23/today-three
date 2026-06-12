@@ -57,7 +57,11 @@ today-three/
     targetDate: "YYYY-MM-DD" | "",   // 목표일
     actualDate: "YYYY-MM-DD" | "",   // 실제 완료일
     notes: string,
-    createdAt: "YYYY-MM-DD"
+    createdAt: "YYYY-MM-DD",
+    repeat: "" | "weekly" | "monthly" | "monthlast" | "yearly"
+    // 반복 업무: 완료 처리 시 spawnNextRepeat()가 다음 회차를 새 업무로 자동 등록.
+    // 다음 목표일은 nextRepeatDate() — 목표일 기준일(anchor) 유지, 말일 클램핑,
+    // 오늘 이후가 나올 때까지 전진. 동일 title+repeat+targetDate 존재 시 중복 생성 안 함
   }],
   lastPopup: "YYYY-MM-DD",  // "오늘 챙길 것" 팝업 하루 1회 제어
   lastBackup: "YYYY-MM-DD"  // 마지막 JSON 내보내기일 — 30일 경과 시 팝업 리마인더

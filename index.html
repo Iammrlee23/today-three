@@ -283,6 +283,15 @@ section.panel.active{display:block}
       <div class="field"><label>목표일</label><input type="date" id="tTarget"></div>
       <div class="field"><label>실제 완료일</label><input type="date" id="tActual"></div>
     </div>
+    <div class="field"><label>반복 (완료 처리하면 다음 회차가 자동 등록)</label>
+      <select id="tRepeat">
+        <option value="">반복 없음</option>
+        <option value="weekly">매주</option>
+        <option value="monthly">매월 — 목표일과 같은 날</option>
+        <option value="monthlast">매월 마지막 날</option>
+        <option value="yearly">매년</option>
+      </select>
+    </div>
     <div class="field"><label>메모 (다음 행동을 "~하면 ~한다"로 적으면 효과적)</label><textarea id="tNotes" placeholder="예: 내일 오전 메일함 열면, 견적 조건 3개 확인부터 한다"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('taskModal')">취소</button>
@@ -555,6 +564,7 @@ function taskCard(t){
         <div class="title ${isDone?'through':''}">${esc(t.title)}</div>
         <div class="meta">
           ${stBadge} ${dday} ${result}
+          ${t.repeat ? '<span class="badge b-routine">🔄 '+REPEAT_LABEL[t.repeat]+'</span>' : ''}
           ${t.counterpart ? '<span>👤 '+esc(t.counterpart)+'</span>' : ''}
           ${t.targetDate ? '<span>🎯 '+t.targetDate+'</span>' : ''}
           ${t.actualDate ? '<span>✅ '+t.actualDate+'</span>' : ''}
@@ -603,10 +613,38 @@ function toggleRoutineActive(id){
   r.active = r.active === false ? true : false;
   save(); render();
 }
+/* 반복 업무: 기준일에서 다음 회차 목표일 계산 (오늘 이후가 나올 때까지 전진) */
+const REPEAT_LABEL = { weekly:'매주', monthly:'매월', monthlast:'매월 말일', yearly:'매년' };
+function nextRepeatDate(baseDs, rep){
+  const base = new Date(baseDs + 'T00:00'), anchorDay = base.getDate(), ts = todayStr();
+  let next = new Date(base);
+  const advance = () => {
+    if(rep === 'weekly') next.setDate(next.getDate() + 7);
+    else if(rep === 'monthly'){
+      const y = next.getFullYear(), m = next.getMonth() + 1;            // 다음 달
+      const last = new Date(y, m + 1, 0).getDate();
+      next = new Date(y, m, Math.min(anchorDay, last));                 // 1/31 → 2/28 클램핑
+    }
+    else if(rep === 'monthlast') next = new Date(next.getFullYear(), next.getMonth() + 2, 0);
+    else if(rep === 'yearly'){
+      const y = next.getFullYear() + 1, m = base.getMonth();
+      next = new Date(y, m, Math.min(anchorDay, new Date(y, m + 1, 0).getDate()));
+    }
+  };
+  do { advance(); } while(todayStr(next) <= ts);
+  return todayStr(next);
+}
+function spawnNextRepeat(t){
+  const nd = nextRepeatDate(t.targetDate || todayStr(), t.repeat);
+  /* 같은 반복 업무의 동일 목표일 중복 등록 방지 (완료↔진행 토글 반복 대비) */
+  if(state.tasks.some(x => x.title === t.title && x.repeat === t.repeat && x.targetDate === nd)) return;
+  state.tasks.push({ id: uid(), title: t.title, counterpart: t.counterpart, status: 'todo',
+    targetDate: nd, actualDate: '', notes: t.notes, createdAt: todayStr(), repeat: t.repeat });
+}
 function quickDone(id){
   const t = state.tasks.find(t=>t.id===id);
   if(t.status === 'done'){ t.status = 'doing'; t.actualDate = ''; }
-  else { t.status = 'done'; if(!t.actualDate) t.actualDate = todayStr(); }
+  else { t.status = 'done'; if(!t.actualDate) t.actualDate = todayStr(); if(t.repeat) spawnNextRepeat(t); }
   save(); render();
 }
 function setFilter(f){ taskFilter = f; render(); }
@@ -633,16 +671,27 @@ function openTaskModal(id){
   $('tTitle').value = t.title || ''; $('tCounterpart').value = t.counterpart || '';
   $('tStatus').value = t.status || 'todo'; $('tTarget').value = t.targetDate || '';
   $('tActual').value = t.actualDate || ''; $('tNotes').value = t.notes || '';
+  $('tRepeat').value = t.repeat || '';
   $('taskModal').classList.add('open'); $('tTitle').focus();
 }
 function saveTask(){
   const title = $('tTitle').value.trim();
   if(!title){ alert('업무명을 입력하세요.'); return; }
   const data = { title, counterpart:$('tCounterpart').value.trim(), status:$('tStatus').value,
-    targetDate:$('tTarget').value, actualDate:$('tActual').value, notes:$('tNotes').value.trim() };
+    targetDate:$('tTarget').value, actualDate:$('tActual').value, notes:$('tNotes').value.trim(),
+    repeat:$('tRepeat').value };
   if(data.status === 'done' && !data.actualDate) data.actualDate = todayStr();
-  if(editTaskId){ Object.assign(state.tasks.find(t=>t.id===editTaskId), data); }
-  else { state.tasks.push(Object.assign({id:uid(), createdAt:todayStr()}, data)); }
+  let saved;
+  if(editTaskId){
+    saved = state.tasks.find(t=>t.id===editTaskId);
+    const wasDone = saved.status === 'done';
+    Object.assign(saved, data);
+    if(!wasDone && data.status === 'done' && data.repeat) spawnNextRepeat(saved);
+  } else {
+    saved = Object.assign({id:uid(), createdAt:todayStr()}, data);
+    state.tasks.push(saved);
+    if(data.status === 'done' && data.repeat) spawnNextRepeat(saved);
+  }
   save(); closeModal('taskModal'); render();
 }
 function deleteTask(){
