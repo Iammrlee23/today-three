@@ -115,6 +115,23 @@ section.panel.active{display:block}
 .week .day .dot.part{background:#A8DCC8;color:#0B5E43}
 .week .day .lab{font-size:10px;color:var(--sub)}
 
+/* 업무 상태 분포 스택바 */
+.stack{display:flex;height:30px;border-radius:8px;overflow:hidden;background:#EFEEE6}
+.stack>span{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;min-width:0}
+.stack-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--sub)}
+.stack-legend span{display:flex;align-items:center;gap:5px}
+.stack-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+/* 완료 추이 막대 */
+.trend{display:flex;gap:5px;align-items:flex-end;height:96px}
+.trend .tb{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.trend .tb .bar2{width:100%;max-width:30px;background:var(--accent);border-radius:6px 6px 0 0;min-height:3px;display:flex;align-items:flex-start;justify-content:center;color:#fff;font-size:10px;font-weight:700;padding-top:2px}
+.trend .tb .tlab{font-size:9px;color:var(--sub);white-space:nowrap}
+/* 카운터파트별 현황 */
+.cp-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.cp-row:last-child{border:none}
+.cp-name{flex:1;font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cp-stat{font-size:12px;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+
 /* 잠금 화면 */
 #lockScreen{position:fixed;inset:0;background:var(--paper);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
 #lockScreen h1{font-size:26px;font-weight:800}
@@ -211,8 +228,18 @@ section.panel.active{display:block}
 
   <!-- ④ 기록 -->
   <section class="panel" id="panel-stats">
-    <div class="sec-head"><h2>기록</h2><span class="hint">진척이 보이면 동기가 오릅니다 (목표 구배 효과)</span></div>
+    <div class="sec-head"><h2>업무 현황</h2><span class="hint">상태 · 기한 · 추이 분석</span></div>
     <div class="stat-grid" id="statCards"></div>
+
+    <div class="sec-head"><h2>업무 상태 분포</h2></div>
+    <div class="card"><div class="stack" id="statusStack"></div><div class="stack-legend" id="statusLegend"></div></div>
+
+    <div class="sec-head"><h2>최근 8주 완료 추이</h2><span class="hint">주당 완료 건수</span></div>
+    <div class="card"><div class="trend" id="trendView"></div></div>
+
+    <div class="sec-head"><h2>카운터파트별 현황</h2><span class="hint">미완료 많은 순 · 최대 8명</span></div>
+    <div id="cpView"></div>
+
     <div class="sec-head"><h2>최근 7일 루틴 달성</h2></div>
     <div class="card"><div class="week" id="weekView"></div></div>
     <div class="sec-head"><h2>데이터 백업</h2><span class="hint">기기에만 저장되므로 주기적 백업 권장</span></div>
@@ -576,17 +603,68 @@ function taskCard(t){
 }
 
 function renderStats(ts){
-  const active = state.tasks.filter(t => t.status==='todo'||t.status==='doing').length;
-  const late = state.tasks.filter(t => t.status!=='done' && t.status!=='hold' && t.targetDate && t.targetDate < ts).length;
-  const doneTasks = state.tasks.filter(t => t.status==='done' && t.targetDate && t.actualDate);
+  const tasks = state.tasks;
+  const byStatus = {todo:0, doing:0, done:0, hold:0};
+  tasks.forEach(t => { if(byStatus[t.status] !== undefined) byStatus[t.status]++; });
+  const total = tasks.length;
+  const active = byStatus.todo + byStatus.doing;
+  const late = tasks.filter(t => t.status!=='done' && t.status!=='hold' && t.targetDate && t.targetDate < ts).length;
+  const doneTasks = tasks.filter(t => t.status==='done' && t.targetDate && t.actualDate);
   const onTime = doneTasks.filter(t => t.actualDate <= t.targetDate).length;
   const rate = doneTasks.length ? Math.round(onTime/doneTasks.length*100) : null;
   const avgSlip = doneTasks.length ? (doneTasks.reduce((s,t)=>s+diffDays(t.targetDate,t.actualDate),0)/doneTasks.length).toFixed(1) : null;
+  const doneThisMonth = tasks.filter(t => t.status==='done' && (t.actualDate||'').slice(0,7) === ts.slice(0,7)).length;
+
+  /* 요약 카드 */
   $('statCards').innerHTML = `
-    <div class="stat"><div class="num">${active}</div><div class="lab">진행·대기 업무</div></div>
+    <div class="stat"><div class="num">${total}</div><div class="lab">전체 업무</div></div>
+    <div class="stat"><div class="num">${active}</div><div class="lab">진행·대기</div></div>
     <div class="stat"><div class="num ${late?'red':'green'}">${late}</div><div class="lab">지연 중</div></div>
+    <div class="stat"><div class="num green">${byStatus.done}</div><div class="lab">완료 누적</div></div>
+    <div class="stat"><div class="num">${doneThisMonth}</div><div class="lab">이번 달 완료</div></div>
     <div class="stat"><div class="num ${rate===null?'':(rate>=70?'green':'red')}">${rate===null?'–':rate+'%'}</div><div class="lab">기한 준수율</div></div>
-    <div class="stat"><div class="num">${avgSlip===null?'–':(avgSlip>0?'+':'')+avgSlip+'일'}</div><div class="lab">평균 지연 (계획오류 지표)</div></div>`;
+    <div class="stat"><div class="num ${avgSlip===null?'':(parseFloat(avgSlip)>0?'red':'green')}">${avgSlip===null?'–':(avgSlip>0?'+':'')+avgSlip+'일'}</div><div class="lab">평균 지연 (계획오류 지표)</div></div>`;
+
+  /* 업무 상태 분포 스택바 */
+  const stackDefs = [['todo','대기','var(--accent)'],['doing','진행중','#0A66B4'],['done','완료','var(--done)'],['hold','보류','var(--hold)']];
+  if(total){
+    $('statusStack').innerHTML = stackDefs.filter(([k])=>byStatus[k]>0).map(([k,l,c]) =>
+      `<span style="flex:${byStatus[k]};background:${c}" title="${l} ${byStatus[k]}건">${byStatus[k]/total>=0.12?byStatus[k]:''}</span>`).join('');
+    $('statusLegend').innerHTML = stackDefs.map(([k,l,c]) => `<span><i style="background:${c}"></i>${l} ${byStatus[k]}</span>`).join('');
+  } else {
+    $('statusStack').innerHTML = ''; $('statusLegend').innerHTML = '<span>등록된 업무가 없습니다.</span>';
+  }
+
+  /* 최근 8주 완료 추이 (일요일 시작 주 단위) */
+  const today = new Date(ts+'T00:00'), thisSun = new Date(today); thisSun.setDate(today.getDate()-today.getDay());
+  const weeks = [];
+  for(let w=7; w>=0; w--){
+    const s = new Date(thisSun); s.setDate(thisSun.getDate()-w*7);
+    const e = new Date(s); e.setDate(s.getDate()+6);
+    const sds = todayStr(s), eds = todayStr(e);
+    const n = tasks.filter(t => t.status==='done' && t.actualDate && t.actualDate>=sds && t.actualDate<=eds).length;
+    weeks.push({n, label: (s.getMonth()+1)+'/'+s.getDate()});
+  }
+  const maxN = Math.max(1, ...weeks.map(w=>w.n));
+  $('trendView').innerHTML = weeks.map(w => `<div class="tb"><div class="bar2" style="height:${Math.round(w.n/maxN*100)}%">${w.n||''}</div><div class="tlab">${w.label}</div></div>`).join('');
+
+  /* 카운터파트별 현황 */
+  const cpMap = {};
+  tasks.forEach(t => {
+    const cp = (t.counterpart||'').trim() || '(미지정)';
+    cpMap[cp] = cpMap[cp] || {open:0, late:0, done:0};
+    if(t.status==='done') cpMap[cp].done++;
+    else if(t.status!=='hold'){ cpMap[cp].open++; if(t.targetDate && t.targetDate < ts) cpMap[cp].late++; }
+  });
+  const cpList = Object.entries(cpMap).filter(([,s]) => s.open || s.done)
+    .sort((a,b)=> (b[1].open-a[1].open) || (b[1].late-a[1].late) || (b[1].done-a[1].done)).slice(0,8);
+  $('cpView').innerHTML = cpList.length ? `<div class="card">${cpList.map(([cp,s]) => `
+    <div class="cp-row"><span class="cp-name">${esc(cp)}</span><span class="cp-stat">
+      ${s.open?`<span class="badge b-todo">미완료 ${s.open}</span>`:''}
+      ${s.late?`<span class="badge b-late">지연 ${s.late}</span>`:''}
+      ${s.done?`<span class="badge b-done">완료 ${s.done}</span>`:''}
+    </span></div>`).join('')}</div>` : '<div class="empty">업무가 없습니다.</div>';
+
   /* 최근 7일 루틴 */
   let html = '';
   for(let i = 6; i >= 0; i--){
