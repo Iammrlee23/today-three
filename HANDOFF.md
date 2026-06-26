@@ -1,7 +1,36 @@
 # HANDOFF — 코드 검토·배포 인수인계 문서
 
-작성일: 2026-06-11
+작성일: 2026-06-11 (최종 갱신: 2026-06-26)
 대상: "오늘, 셋" 루틴·업무 트래커 (오프라인 우선 PWA)
+
+---
+
+## 0. 세션 진행 경과 (다른 컴퓨터에서 이어서 작업할 때 먼저 읽기)
+
+현재 라이브 배포: **https://iammrlee23.github.io/today-three/**
+
+이 프로젝트는 두 개의 GitHub 저장소로 구성됨:
+- `Iammrlee23/today-three` — 앱 본체 (이 폴더). Pages 빌드 타입 = GitHub Actions
+- `Iammrlee23/iammrlee23.github.io` — 도메인 루트. TWA용 `.well-known/assetlinks.json`
+  (안드로이드 APK 주소창 숨김 검증)과 루트→앱 리다이렉트 + `.nojekyll` 포함.
+  APK 패키지명 `io.github.iammrlee23.twa`, 인증서 지문은 PWABuilder zip 기준.
+
+작업 순서대로 반영된 변경 (sw.js `CACHE` 버전으로 추적):
+- v1: 초기 배포 (루틴·업무·기록 4탭)
+- v2: PIN 화면 잠금(`todaythree:pin`, 백업 미포함), 연간(yearly) 루틴, 오늘 탭 업무 그룹화(지연/오늘/임박/진행중), 다가오는 일정 카드
+- v3: 1년 내 이슈 선제 대응 — GitHub Actions 버전 업(checkout v6 등 Node 20 종료 대비), routineLog 180일 자동 정리(`LOG_KEEP_DAYS`), 백업 리마인더(`lastBackup`)
+- v4: 캘린더 탭(월간 그리드 + 주간 리스트) 신설 → 탭 5개
+- v5: iOS Safari 입력 확대 고착 해결(입력칸 16px + viewport maximum-scale=1 + apple 메타), 다가오는 일정 루틴당 1회만, 매월 첫째 날(monthfirst)·마지막 날(monthlast) 루틴
+- v6: 반복 업무 — 완료 처리 시 `spawnNextRepeat()`로 다음 회차 자동 등록(task.repeat: weekly/monthly/monthlast/yearly)
+- v7: 기록 탭 업무 분석 보강 — 요약 7카드, 상태 분포 스택바, 최근 8주 완료 추이, 카운터파트별 현황
+
+작업 규약(이 세션에서 굳어진 것):
+- 코드 수정 후 **반드시 sw.js `CACHE` 버전을 올리고** main에 push → Actions 자동 배포
+- 배포 후 `gh run watch`로 성공 확인 + 라이브 URL에 변경 키워드 grep으로 검증
+- UI 변경은 python http.server(.claude/launch.json, 포트 8642) + preview 도구로 실구동 검증
+- 검증 시 SW가 구버전을 서빙하므로, preview에서 `caches.delete` + SW unregister 후 reload
+- git 커밋 author는 gh 계정 기준 로컬 설정, 커밋 메시지 끝에 Co-Authored-By 트레일러
+- 미해결/추가 아이디어는 아래 §7 TODO 표 참조 (푸시 알림, 업무 정렬·검색, IndexedDB 등)
 
 ---
 
